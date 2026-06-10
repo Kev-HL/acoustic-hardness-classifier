@@ -1,0 +1,35 @@
+# Byte-compiled / cache
+# Python cache folders
+__pycache__/
+# Compiled Python files (.pyc, .pyo, etc.)
+*.py[cod]
+# Python package build artifacts
+*.egg-info/
+# Temporary files from Jupyter notebooks
+.ipynb_checkpoints/
+# Other temp files
+*.log 
+.coverage
+
+# Data
+# Don't track datasets
+/data/
+
+# Artifacts
+# Don't track model checkpoints, logs, and other artifacts
+/artifacts/
+/logs/
+
+# VSCode
+# Editor-specific settings
+.vscode/
+
+# Environment
+# Environment variables files
+.env
+# Catch other .env-like files
+*.env
+
+# OS
+.DS_Store       # macOS
+Thumbs.db       # Windows
