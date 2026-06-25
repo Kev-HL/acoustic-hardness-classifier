@@ -1,8 +1,9 @@
 # Acoustic Hardness Classification With TinyML
 
+![CI](https://github.com/Kev-HL/acoustic-hardness-classifier/actions/workflows/ci.yaml/badge.svg)
 ![C++](https://img.shields.io/badge/C++-17-00599C.svg)
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)
-![TensorFlow 2.17](https://img.shields.io/badge/tensorflow-2.17-orange.svg)
+![TensorFlow 2.21](https://img.shields.io/badge/tensorflow-2.21-orange.svg)
 ![Arduino](https://img.shields.io/badge/arduino-nano%2033%20ble-00979D.svg)
 ![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)
 
