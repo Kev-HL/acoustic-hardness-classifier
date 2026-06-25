@@ -138,8 +138,9 @@ def get_arduino_data(ser: serial.Serial, timeout: float = 120.0) -> Dict[str, An
         if (
             "Drop object to trigger capture" in line
             or "TRIGGER DETECTED" in line
-            or "READY FOR NEXT" in line
+            or "RECORDING DATA" in line
             or "Max loop" in line
+            or "READY FOR NEXT" in line
         ):
             logger.info(f"Arduino: {line}")
             continue
