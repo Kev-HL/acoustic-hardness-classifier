@@ -12,8 +12,8 @@ __pycache__/
 .coverage
 
 # Data
-# Don't track datasets
-/data/
+# Don't track processed data
+/data/processed/
 
 # Artifacts
 # Don't track model checkpoints, logs, and other artifacts

@@ -1,0 +1,10 @@
+---
+Language: Cpp
+BasedOnStyle: Google
+IndentWidth: 2
+ColumnLimit: 80
+UseTab: Never
+BreakBeforeBraces: Attach
+PointerAlignment: Left
+AccessModifierOffset: -2
+AllowShortFunctionsOnASingleLine: Inline
