@@ -1,0 +1,3 @@
+# Python 3.12.3
+clang-format==22.1.5
+cpplint==2.0.2
