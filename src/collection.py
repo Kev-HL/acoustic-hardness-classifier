@@ -153,7 +153,7 @@ def get_arduino_data(ser: serial.Serial, timeout: float = 120.0) -> Dict[str, An
 
         if "END RECORDING" in line:
             raise DataCollectionError(
-                "There was an unexpected 'END RECORDING' or invalid JSON data. "
+                "There was an unexpected 'END RECORDING' or invalid JSON data."
             )
 
     # Parse JSON
