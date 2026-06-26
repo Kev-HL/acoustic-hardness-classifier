@@ -20,6 +20,13 @@ __pycache__/
 /artifacts/
 /logs/
 
+# Build executables
+# Don't track build artifacts or binaries
+/build/
+/dist/
+*.spec
+.build_cache/
+
 # VSCode
 # Editor-specific settings
 .vscode/
