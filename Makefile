@@ -3,7 +3,7 @@
 # Install dependencies
 setup:
 	python -m pip install --upgrade pip
-	pip install -r requirements.txt
+	pip install -r requirements-dev.txt
 	pip install -e .
 
 # Format code and check style (black, flake8, clang-format, cpplint)
