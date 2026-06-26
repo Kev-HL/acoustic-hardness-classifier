@@ -5,6 +5,7 @@ Python module for data collection logic for the Accoustic Hardness Classifier Pr
 # Standard imports
 import json
 import logging
+import signal
 import time
 import uuid
 from datetime import datetime, timezone
@@ -23,6 +24,38 @@ class DataCollectionError(Exception):
     """Custom exception for data collection errors."""
 
     pass
+
+
+class InterruptDebouncer:
+    """
+    Debounce keyboard interrupts on PyInstaller executables.
+
+    PyInstaller's event loop has a higher polling rate for Ctrl+C, causing
+    multiple KeyboardInterrupt signals in quick succession.
+    """
+
+    def __init__(self, debounce_seconds: float = 0.5):
+        self.debounce_seconds = debounce_seconds
+        self.last_interrupt_time: float = -float("inf")  # Let first interrupt through
+        self.first_interrupt_caught = False
+        signal.signal(signal.SIGINT, self._handle)
+
+    def _handle(self, sig, frame):
+        current_time = time.perf_counter()
+
+        # First interrupt always goes through
+        if not self.first_interrupt_caught:
+            self.first_interrupt_caught = True
+            self.last_interrupt_time = current_time
+            raise KeyboardInterrupt()
+
+        # Next interrupts: ignore if within debounce window
+        if current_time - self.last_interrupt_time < self.debounce_seconds:
+            return  # Ignore this interrupt
+
+        # If debounce window has passed, allow the interrupt
+        self.last_interrupt_time = current_time
+        raise KeyboardInterrupt()
 
 
 def init_serial_connection(

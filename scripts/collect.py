@@ -26,6 +26,7 @@ from inputimeout import inputimeout, TimeoutOccurred
 # Local imports
 from collection import (
     DataCollectionError,
+    InterruptDebouncer,
     init_serial_connection,
     input_sample_metadata,
     get_arduino_data,
@@ -54,6 +55,9 @@ SAMPLE_TIMEOUT = 120  # seconds
 SERIAL_TIMEOUT = 10.0  # seconds
 DEFAULT_BAUDRATE = 1000000  # 1Mbps max rate for Nano 33 BLE Sense Rev2
 DEFAULT_SERIAL_PORT = "/dev/ttyACM0"  # Default serial port for Arduino
+
+# Debouncer class to handle rapid interrupts in PyInstaller executables
+interrupt_debouncer = InterruptDebouncer()
 
 
 # Main function
