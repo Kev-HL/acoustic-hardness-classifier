@@ -14,9 +14,11 @@ By analyzing the acoustic response of impacts, this project classifies material 
 
 <!-- Project Hero GIF -->
 <div align="center">
-  <img src="media/payload_releaser.gif" alt="Payload Releaser Device dropping a marble onto a target" style="border: 1px solid #e1e4e8; border-radius: 6px;" width="50%">
-  <p><i>The "Payload Releaser Device" (toy excavator) dropping a marble onto the target surface to ensure reproducible acoustic samples.</i></p>
+  <img src="media/impactor_releaser.gif" alt="Impactor Releaser Device dropping a marble onto the impact zone" style="border: 1px solid #e1e4e8; border-radius: 6px;" width="50%">
+  <p><i>The "Impactor Releaser Device" (toy excavator) dropping a marble onto the impact zone on the target surface.</i></p>
 </div>
+
+> **HARDNESS NOTE:** Throughout this project, the term **hardness** is used for simplicity. The classification is not a direct measurement of material hardness; instead, it is based on the acoustic response produced when an object impacts a surface, which reflects a combination of the surface's mechanical and acoustic properties.
 
 ---
 
@@ -54,7 +56,7 @@ This project implements an end-to-end machine learning pipeline on a microcontro
 - **Sensors:** 
   - MP34DT06JTR PDM Microphone (audio input)
   - BMI270 + BMM150 IMU (auxiliary)
-- **Drop System:** Custom Payload Releaser Device (~7cm fixed height, 1cm iron marble)
+- **Drop System:** Impactor Releaser Device (~7cm fixed height, 1cm ~10g iron marble)
 
 <!-- Real Setup Photos -->
 <h3 align="center">Physical Data Collection Hardware</h3>
@@ -65,7 +67,7 @@ This project implements an end-to-end machine learning pipeline on a microcontro
 <br>
 
 <!-- Technical Blueprints -->
-<h3 align="center">Payload Releaser Device - Schematic Blueprints (X-Z & X-Y Planes)</h3>
+<h3 align="center">Impactor Releaser Device - Schematic Blueprints (X-Z & X-Y Planes)</h3>
 <div align="center">
   <img src="media/method_blueprint.png" alt="Technical blueprint collage" style="border: 1px solid #e1e4e8; border-radius: 6px;" width="100%">
 </div>
@@ -74,6 +76,11 @@ This project implements an end-to-end machine learning pipeline on a microcontro
 
 ## Methodology
 
+### Classification Task
+- **Soft:** Low-energy, quick decay
+- **Medium:** Moderate energy, partial damping
+- **Hard:** High-energy, sustained ringing 
+
 ### Acoustic Setup
 - **Sampling Rate:** 16 kHz
 - **Recording Duration:** 2.5 seconds per impact
@@ -81,10 +88,15 @@ This project implements an end-to-end machine learning pipeline on a microcontro
 - **Pre-trigger Buffer:** 50ms (ambient baseline)
 - **Post-trigger Window:** 2.45s
 
-### Classification Task
-- **Soft:** Low-energy, quick decay
-- **Medium:** Moderate energy, partial damping
-- **Hard:** High-energy, sustained ringing
+### Data Collection Workflow
+
+1. **Initial Setup:** Connect the Arduino to the PC and execute `collect.py` (or the compiled executable).
+2. **Metadata Input:** `collect.py` prompts for metadata (material name, class/label, comments).
+4. **Confirm Readiness:** `collect.py` prompts whether user is ready to take the sample.
+5. **Acoustic Trigger:** Release the impactor. 
+6. **Arduino Routine:** `recorder.ino` detects the threshold breach, and streams the data over the Serial port.
+7. **Data Processing:** `collect.py` reads and validates the stream, saving the data as a unique UUID-named JSON file.
+8. **Session Management:** `collect.py` prompts whether to continue (loops back to **step 2** or exits).
 
 ---
 
