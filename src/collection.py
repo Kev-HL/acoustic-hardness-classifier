@@ -1,5 +1,5 @@
 """
-Python module for data collection logic for the Accoustic Hardness Classifier Project.
+Python module for data collection logic for the Acoustic Hardness Classifier Project.
 """
 
 # Standard imports
@@ -80,7 +80,11 @@ def init_serial_connection(
         logger.info(f"Connected to Arduino on {port} at {baudrate} baud.")
         return ser
     except serial.SerialException as e:
+        logger.error(f"Failed to connect to Arduino on {port}: {e}")
         raise DataCollectionError(f"Failed to connect to Arduino on {port}: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error while connecting to Arduino: {e}")
+        raise DataCollectionError(f"Unexpected error while connecting to Arduino: {e}")
 
 
 def input_sample_metadata(timeout: float) -> Dict[str, Any]:
@@ -100,6 +104,7 @@ def input_sample_metadata(timeout: float) -> Dict[str, Any]:
                 timeout=timeout,
             ).strip()
         except TimeoutOccurred:
+            logger.error("Timeout occurred while waiting for input.")
             raise DataCollectionError("Timeout occurred while waiting for input.")
         if material_name and len(material_name) > 2:
             break
@@ -113,6 +118,7 @@ def input_sample_metadata(timeout: float) -> Dict[str, Any]:
                 .lower()
             )
         except TimeoutOccurred:
+            logger.error("Timeout occurred while waiting for input.")
             raise DataCollectionError("Timeout occurred while waiting for input.")
         if material_class in ["hard", "medium", "soft"]:
             break
@@ -123,6 +129,7 @@ def input_sample_metadata(timeout: float) -> Dict[str, Any]:
             prompt="Comment (press Enter to skip): ", timeout=timeout
         ).strip()
     except TimeoutOccurred:
+        logger.error("Timeout occurred while waiting for input.")
         raise DataCollectionError("Timeout occurred while waiting for input.")
     return {
         "material": material_name,
@@ -161,6 +168,10 @@ def get_arduino_data(ser: serial.Serial, timeout: float = 120.0) -> Dict[str, An
                 )
                 logger.info("Continuing listening for trigger...")
             elif elapsed_time >= (timeout):
+                logger.error(
+                    f"Timeout: No data received in {elapsed_time:.2f} seconds. "
+                    "Check Arduino connection and settings."
+                )
                 raise DataCollectionError(
                     f"Timeout: No data received in {elapsed_time:.2f} seconds. "
                     "Check Arduino connection and settings."
@@ -185,6 +196,9 @@ def get_arduino_data(ser: serial.Serial, timeout: float = 120.0) -> Dict[str, An
             break
 
         if "END RECORDING" in line:
+            logger.error(
+                "There was an unexpected 'END RECORDING' or invalid JSON data."
+            )
             raise DataCollectionError(
                 "There was an unexpected 'END RECORDING' or invalid JSON data."
             )
@@ -194,6 +208,7 @@ def get_arduino_data(ser: serial.Serial, timeout: float = 120.0) -> Dict[str, An
         data = json.loads(buffer)
         logger.info("Parsed JSON data successfully.")
     except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON from Arduino: {e}\nBuffer: {buffer[:200]}")
         raise DataCollectionError(
             f"Invalid JSON from Arduino: {e}\nBuffer: {buffer[:200]}"
         )
@@ -231,10 +246,15 @@ def _validate_audio_data(data: Dict[str, Any]) -> None:
     ]
     missing = [f for f in required_fields if f not in data]
     if missing:
+        logger.error(f"Missing required fields in Arduino data: {missing}")
         raise DataCollectionError(f"Missing required fields: {missing}")
 
     # Validate sample count
     if len(data["values"]) != data["num_samples"]:
+        logger.error(
+            f"Sample count mismatch: expected {data['num_samples']}, "
+            f"got {len(data['values'])}"
+        )
         raise DataCollectionError(
             f"Sample count mismatch: expected {data['num_samples']}, "
             f"got {len(data['values'])}"
@@ -243,6 +263,10 @@ def _validate_audio_data(data: Dict[str, Any]) -> None:
     # Validate reasonable amplitude
     max_amplitude = max(abs(v) for v in data["values"])
     if max_amplitude < data["trigger_threshold"]:
+        logger.error(
+            f"Unexpected max amplitude ({max_amplitude}) < "
+            f"trigger threshold ({data['trigger_threshold']}) in sample."
+        )
         raise DataCollectionError(
             f"Unexpected max amplitude ({max_amplitude}) < "
             f"trigger threshold ({data['trigger_threshold']}) in sample."
@@ -250,6 +274,7 @@ def _validate_audio_data(data: Dict[str, Any]) -> None:
 
     # Raise if overflow detected
     if data.get("overflow"):
+        logger.error("Audio buffer overflow detected. Discarding sample.")
         raise DataCollectionError("Audio buffer overflow detected. Discarding sample.")
 
     logger.info("Audio data validated successfully.")
@@ -315,4 +340,5 @@ def save_sample(sample: Dict[str, Any], output_dir: Path) -> None:
         logger.info(f"Saved: {filename} ({file_size_kb:.1f} KB)")
 
     except IOError as e:
+        logger.error(f"Failed to save sample: {e}")
         raise DataCollectionError(f"Failed to save sample: {e}")

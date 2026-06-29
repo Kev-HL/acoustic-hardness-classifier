@@ -72,8 +72,8 @@ def main() -> None:
             Default port if not specified: {DEFAULT_SERIAL_PORT}
             Default baudrate if not specified: {DEFAULT_BAUDRATE}
             Examples:
-            python gather_data.py data/raw/phase1
-            python gather_data.py data/raw/phase2 --port /dev/ttyACM0 --baud 1000000
+            python collect.py data/raw/phase1
+            python collect.py data/raw/phase2 --port /dev/ttyACM0 --baud 1000000
         """,
     )
     parser.add_argument("output_dir", help="Output directory for samples")
@@ -191,6 +191,9 @@ def main() -> None:
         sys.exit(1)
     except KeyboardInterrupt:
         logger.info("\n\nCollection interrupted by user")
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}", exc_info=True)
+        sys.exit(1)
     finally:
         if ser and ser.is_open:
             ser.close()
