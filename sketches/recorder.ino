@@ -68,10 +68,14 @@ void setup() {
     }  // Halt system if there is something wrong
   }
 
+  // Initialize digital pin LED_BUILTIN as an output.
+  pinMode(LED_BUILTIN, OUTPUT);
+
   waitStart = millis();  // Record start time for initial wait on new recording
   while ((millis() - waitStart) < 3000) {
   }  // Wait on initial board connection
   Serial.println("Recording continuously. Drop object to trigger capture...");
+  digitalWrite(LED_BUILTIN, HIGH);  // LED ON: ready for trigger
 }
 
 // Continuous execution
@@ -94,6 +98,8 @@ void loop() {
       if (!recordingTriggered && abs(sampleBuffer[i]) > TRIGGER_THRESHOLD) {
         // Set event flag to true
         recordingTriggered = true;
+        digitalWrite(LED_BUILTIN, LOW);  // LED OFF: busy recording/transmitting
+
         // Record index where trigger happened
         triggerIndex = ((bufferWriteIndex - 1 + CIRCULAR_BUFFER_SIZE) %
                         CIRCULAR_BUFFER_SIZE);
@@ -128,6 +134,7 @@ void loop() {
           overflowFlag = 0;
           waitStart = millis();
           Serial.println("--- READY FOR NEXT DROP ---");
+          digitalWrite(LED_BUILTIN, HIGH);  // LED ON: ready for trigger
           return;
         }
       }
