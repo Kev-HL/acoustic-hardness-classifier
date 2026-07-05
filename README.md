@@ -1,12 +1,11 @@
 # Acoustic Hardness Classification With TinyML
 
 ![CI](https://github.com/Kev-HL/acoustic-hardness-classifier/actions/workflows/ci.yaml/badge.svg)
-![C++](https://img.shields.io/badge/C++-17-00599C.svg)
-![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)
-![TensorFlow 2.21](https://img.shields.io/badge/tensorflow-2.21-orange.svg)
-![Arduino](https://img.shields.io/badge/arduino-nano%2033%20ble-00979D.svg)
-![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)
-
+![C++](https://img.shields.io/badge/C++-17-00599C?&logo=c%2B%2B&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![TensorFlow 2.21](https://img.shields.io/badge/TensorFlow-2.21-FFA800?logo=tensorflow&logoColor=white)
+![Code style: Ruff](https://img.shields.io/badge/Code%20Style-Ruff-262626?logo=ruff&logoColor=D7FF64)
+![Arduino](https://img.shields.io/badge/Arduino-Nano%2033%20BLE-00979D?logo=arduino&logoColor=white)
 
 Real-time audio-based surface hardness classification running on the Arduino Nano 33 BLE Sense Rev 2.
 
@@ -110,8 +109,7 @@ This project implements an end-to-end machine learning pipeline on a microcontro
 - Matplotlib — Visualization
 
 **Development:**
-- Black — Code formatting
-- Flake8 — Linting
+- Ruff — Code formatting and linting
 - Pytest — Unit testing
 
 ---
