@@ -17,16 +17,18 @@ setup-dev:
 # Format code and check style (black, flake8, clang-format, cpplint)
 format:
 	@echo "Formatting source code"
-	$(PYTHON) -m black src/ scripts/ tests/
-	$(PYTHON) -m flake8 src/ scripts/ tests/
+	$(PYTHON) -m ruff check --fix --show-fixes
+	# First format --check to list files to be formatted
+	- $(PYTHON) -m ruff format --check
+	$(PYTHON) -m ruff format
 	clang-format -i sketches/*.ino
 	$(PYTHON) -m cpplint --extensions=ino sketches/*.ino
 
 # Validate code format and style (black, flake8, clang-format, cpplint)
 lint:
 	@echo "Linting source code"
-	$(PYTHON) -m black --check src/ scripts/ tests/
-	$(PYTHON) -m flake8 src/ scripts/ tests/
+	$(PYTHON) -m ruff check
+	$(PYTHON) -m ruff format --check
 	clang-format --dry-run --Werror sketches/*.ino
 	$(PYTHON) -m cpplint --extensions=ino sketches/*.ino
 

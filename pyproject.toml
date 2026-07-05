@@ -12,13 +12,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "black==26.5.1",
     "clang-format==22.1.5",
     "cpplint==2.0.2",
-    "flake8==7.3.0",
     "pyinstaller==6.21.0",
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
+    "ruff==0.15.20",
 ]
 
 [project.scripts]
@@ -29,3 +28,14 @@ collect = "ahc.cli:run_collect"
 markers = [
     "integration: marks tests as integration (require external resources)",
 ]
+
+[tool.ruff]
+# Default is 88, but to be explicit
+line-length = 88
+
+[tool.ruff.lint]
+# E/W = Pycodestyle (Flake8 style rules)
+# F   = Pyflakes (Catches unused imports/variables and syntax errors)
+# I   = Isort (Automatically cleans up and alphabetizes your imports!)
+select = ["E", "F", "W", "I"]
+ignore = []

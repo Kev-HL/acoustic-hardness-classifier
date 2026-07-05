@@ -2,7 +2,7 @@
 
 # Standard imports
 import logging
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
 # Third party imports
 import pytest
@@ -12,10 +12,10 @@ from inputimeout import TimeoutOccurred
 # Local imports
 from ahc.collection import (
     DataCollectionError,
+    _validate_audio_data,
+    get_arduino_data,
     init_serial_connection,
     input_sample_metadata,
-    get_arduino_data,
-    _validate_audio_data,
 )
 
 

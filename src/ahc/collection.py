@@ -10,11 +10,11 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 # Third-party imports
 import serial
-from inputimeout import inputimeout, TimeoutOccurred
+from inputimeout import TimeoutOccurred, inputimeout
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -164,7 +164,7 @@ def get_arduino_data(ser: serial.Serial, timeout: float = 120.0) -> Dict[str, An
                 timeout / 2 + serial_timeout
             ):
                 logger.warning(
-                    f"No data received in more than {timeout/2:.2f} seconds."
+                    f"No data received in more than {timeout / 2:.2f} seconds."
                 )
                 logger.info("Continuing listening for trigger...")
             elif elapsed_time >= (timeout):

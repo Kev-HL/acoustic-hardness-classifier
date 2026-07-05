@@ -21,16 +21,16 @@ from datetime import datetime
 from pathlib import Path
 
 # Third-party imports
-from inputimeout import inputimeout, TimeoutOccurred
+from inputimeout import TimeoutOccurred, inputimeout
 
 # Local imports
 from ahc.collection import (
     DataCollectionError,
     InterruptDebouncer,
+    create_sample,
+    get_arduino_data,
     init_serial_connection,
     input_sample_metadata,
-    get_arduino_data,
-    create_sample,
     save_sample,
 )
 
