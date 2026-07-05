@@ -24,7 +24,7 @@ from pathlib import Path
 from inputimeout import inputimeout, TimeoutOccurred
 
 # Local imports
-from collection import (
+from ahc.collection import (
     DataCollectionError,
     InterruptDebouncer,
     init_serial_connection,

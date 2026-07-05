@@ -1,10 +1,13 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools >= 77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "accoustic-hardness-classifier"
-version = "0.1.0"
+name = "acoustic-hardness-classifier"
+version = "0.1.1"
+
+[project.scripts]
+collect = "ahc.cli:run_collect"
 
 [tool.pytest.ini_options]
 # Markers for filtering tests

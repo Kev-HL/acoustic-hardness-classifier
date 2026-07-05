@@ -10,7 +10,7 @@ import serial
 from inputimeout import TimeoutOccurred
 
 # Local imports
-from collection import (
+from ahc.collection import (
     DataCollectionError,
     init_serial_connection,
     input_sample_metadata,
@@ -19,7 +19,7 @@ from collection import (
 )
 
 
-@patch("collection.serial.Serial")
+@patch("ahc.collection.serial.Serial")
 class TestInitSerialConnection:
     """Test cases for the init_serial_connection function."""
 
@@ -50,7 +50,7 @@ class TestInitSerialConnection:
             init_serial_connection(port)
 
 
-@patch("collection.inputimeout")
+@patch("ahc.collection.inputimeout")
 class TestInputSampleMetadata:
     """Test cases for the input_sample_metadata function."""
 
@@ -100,7 +100,7 @@ class TestInputSampleMetadata:
         assert "Wrong input. Please enter: hard, medium, or soft" in caplog.text
 
 
-@patch("collection._validate_audio_data", side_effect=None)
+@patch("ahc.collection._validate_audio_data", side_effect=None)
 class TestGetArduinoData:
     """Test cases for the get_arduino_data function."""
 
@@ -132,7 +132,7 @@ class TestGetArduinoData:
         assert isinstance(data, dict)
         assert data == {"foo": "bar"}
 
-    @patch("collection.time.perf_counter", side_effect=[0.0, 1.0, 65.0, 125.0])
+    @patch("ahc.collection.time.perf_counter", side_effect=[0.0, 1.0, 65.0, 125.0])
     def test_timeout_no_data(
         self,
         mock_time: Mock,
