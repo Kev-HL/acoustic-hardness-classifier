@@ -7,6 +7,10 @@ __pycache__/
 *.egg-info/
 # Temporary files from Jupyter notebooks
 .ipynb_checkpoints/
+# Temporary files from testing
+.pytest_cache/
+# Temporary files from linting/formatting tools
+.ruff_cache/
 # Other temp files
 *.log 
 .coverage
