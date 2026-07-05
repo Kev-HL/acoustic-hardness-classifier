@@ -1,3 +1,0 @@
-# Python 3.12.3
-inputimeout==1.0.4
-pyserial==3.5

@@ -5,6 +5,21 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "acoustic-hardness-classifier"
 version = "0.1.1"
+dependencies = [
+    "inputimeout==1.0.4",
+    "pyserial==3.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black==26.5.1",
+    "clang-format==22.1.5",
+    "cpplint==2.0.2",
+    "flake8==7.3.0",
+    "pyinstaller==6.21.0",
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+]
 
 [project.scripts]
 collect = "ahc.cli:run_collect"
