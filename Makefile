@@ -7,7 +7,7 @@ PYTHON ?= python3
 # Install dependencies (core)
 setup:
 	$(PYTHON) -m pip install --upgrade pip
-	$(PYTHON) -m pip install -e .
+	$(PYTHON) -m pip install .
 
 # Install dependencies (core + dev)
 setup-dev:
