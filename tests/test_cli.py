@@ -8,7 +8,7 @@ import sys
 import pytest
 
 # Local imports
-from src.ahc.cli import run_collect
+from ahc.cli import run_collect
 
 
 class TestRunCollect:
