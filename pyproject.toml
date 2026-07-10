@@ -43,3 +43,4 @@ line-length = 88
 # I   = Isort (Automatically cleans up and alphabetizes your imports!)
 select = ["E", "F", "W", "I"]
 ignore = []
+extend-safe-fixes = ["W293"]
