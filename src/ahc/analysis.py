@@ -367,29 +367,41 @@ def compute_ambient_noise_level(samples: list[dict], duration: float) -> dict:
     }
 
 
-def plot_time_domain(samples, duration=0.0, legend=False, classes_axes_map=None):
+def plot_time_domain(samples, plot_window=None, legend=False, classes_axes_map=None):
     """
     Plot raw waveforms for each class.
 
     Args:
         samples: List of sample dicts
-        duration: Plot length in seconds (0: full duration, capped at sample duration)
+        plot_window: Plot window in seconds. If None, plot full duration.
         legend: True/False Show sample IDs in legend
         classes_axes_map: Dict mapping class names to subplot indices
 
     Note: Assumes samples have been validated, and all samples have the same sample rate
     and duration.
     """
+    # Default mapping of classes to subplot indices if not provided
     if classes_axes_map is None:
         classes_axes_map = {"hard": 0, "medium": 1, "soft": 2}
-    # Get the duration to plot, capped at the sample duration
-    duration = samples[0]["audio"]["duration_seconds"] if duration <= 0 else duration
-    duration = min(duration, samples[0]["audio"]["duration_seconds"])
+
+    # Get the duration to plot, capped at the sample duration boundaries
+    if plot_window is None:
+        plot_window = [0.0, 0.0]  # Defaults to full duration
+    window_start, window_end = plot_window
+    signal_duration = samples[0]["audio"]["duration_seconds"]
+    window_start = max(0.0, window_start)
+    window_end = min(window_end, signal_duration)
+    if window_end <= window_start:
+        window_start = 0.0
+        window_end = signal_duration
+
     # Get the sample rate and number of samples to plot
     sample_rate = samples[0]["audio"]["sample_rate"]
-    num_samples = min(samples[0]["audio"]["num_samples"], int(duration * sample_rate))
+    num_samples_start = int(window_start * sample_rate)
+    num_samples_end = int(window_end * sample_rate)
+    num_samples = num_samples_end - num_samples_start
 
-    time = np.linspace(0, duration, num_samples)
+    time = np.linspace(window_start, window_end, num_samples)
 
     fig, axes = plt.subplots(3, 1, figsize=(14, 10))
     fig.suptitle("Time-Domain Audio Signals by Class", fontsize=14, fontweight="bold")
@@ -400,7 +412,11 @@ def plot_time_domain(samples, duration=0.0, legend=False, classes_axes_map=None)
         # Remove DC offset for better visualization before slicing
         signal = sample["audio"]["values"]
         signal = remove_dc_offset(signal)  # Remove DC offset for better visualization
-        signal = signal[0:num_samples]
+
+        # Slice the signal to the specified plot window
+        signal = signal[num_samples_start:num_samples_end]
+
+        # Get sample ID for labeling
         sample_id = sample["metadata"]["sample_id"]
 
         # Plot the waveform
