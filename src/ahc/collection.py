@@ -140,82 +140,97 @@ def input_sample_metadata(timeout: float) -> Dict[str, Any]:
 
 def get_arduino_data(ser: serial.Serial, timeout: float = 120.0) -> Dict[str, Any]:
     """
-    Listen for Arduino trigger and capture audio data.
+    Listen for Arduino data with non-blocking reads.
+
+    This avoids the problem where large JSON payloads cause Arduino to block because
+    PySerial's readline() is too slow to drain the serial buffer.
 
     Returns:
         Dictionary containing audio data and metadata from Arduino.
 
     Raises:
-        DataCollectionError: If data is invalid.
+        DataCollectionError: If data is invalid, if a timeout occurs, or if serial read
+        fails.
     """
     logger.info("Listening for trigger...")
     buffer = ""
     start_time = time.perf_counter()
-    serial_timeout = ser.timeout if ser.timeout is not None else 10.0
 
     while True:
-        # Read line from Arduino
-        line = ser.readline().decode("utf-8", errors="ignore").strip()
+        # Non-blocking read: read whatever is available
+        if ser.in_waiting > 0:
+            try:
+                # Read up to 4KB at a time (small reads, keeps loop responsive)
+                chunk = ser.read(min(ser.in_waiting, 4096))
+                buffer += chunk.decode("utf-8", errors="ignore")
 
-        if not line:
-            # Check for timeout warning
-            elapsed_time = time.perf_counter() - start_time
-            if elapsed_time > timeout / 2 and elapsed_time < (
-                timeout / 2 + serial_timeout
-            ):
-                logger.warning(
-                    f"No data received in more than {timeout / 2:.2f} seconds."
-                )
-                logger.info("Continuing listening for trigger...")
-            elif elapsed_time >= (timeout):
-                logger.error(
-                    f"Timeout: No data received in {elapsed_time:.2f} seconds. "
-                    "Check Arduino connection and settings."
-                )
-                raise DataCollectionError(
-                    f"Timeout: No data received in {elapsed_time:.2f} seconds. "
-                    "Check Arduino connection and settings."
-                )
-            continue
+            except Exception as e:
+                logger.error(f"Error reading from serial: {e}")
+                raise DataCollectionError(f"Serial read error: {e}")
 
-        # Print status messages
-        if (
-            "Drop object to trigger capture" in line
-            or "TRIGGER DETECTED" in line
-            or "RECORDING DATA" in line
-            or "Max loop" in line
-            or "READY FOR NEXT" in line
-        ):
-            logger.info(f"Arduino: {line}")
-            continue
+        # Process any complete JSON-like objects in buffer
+        while True:
+            # Look for complete JSON: starts with { and ends with }\n
+            if buffer.startswith("{"):
+                # Find closing brace followed by newline
+                json_end = buffer.find("}\n")
+                if json_end != -1:
+                    json_str = buffer[: json_end + 1].strip()
+                    buffer = buffer[json_end + 2 :]  # Remove processed data
+                    try:
+                        data = json.loads(json_str)
+                        logger.info("Parsed JSON data successfully.")
+                    except json.JSONDecodeError as e:
+                        logger.error(
+                            f"Invalid JSON from Arduino: {e}\nBuffer: {buffer[:200]}"
+                        )
+                        raise DataCollectionError(
+                            f"Invalid JSON from Arduino: {e}\nBuffer: {buffer[:200]}"
+                        )
 
-        # Capture JSON data
-        if line.startswith("{") and line.endswith("}"):
-            buffer = line
-            logger.info("Received JSON data from Arduino.")
-            break
+                    _validate_audio_data(data)
+                    return data
+                else:
+                    # JSON not complete yet, wait for more data
+                    break
+            else:
+                # Buffer doesn't start with {, look for status messages
+                line_end = buffer.find("\n")
+                if line_end != -1:
+                    line = buffer[:line_end].strip()
+                    buffer = buffer[line_end + 1 :]
 
-        if "END RECORDING" in line:
-            logger.error(
-                "There was an unexpected 'END RECORDING' or invalid JSON data."
+                    # Log Arduino status messages
+                    if any(
+                        x in line
+                        for x in [
+                            "TRIGGER",
+                            "RECORDING",
+                            "Max loop",
+                            "READY",
+                            "Drop object",
+                        ]
+                    ):
+                        logger.info(f"Arduino: {line}")
+                    elif "END RECORDING" in line:
+                        logger.error("Unexpected END RECORDING without valid JSON")
+                        raise DataCollectionError("Invalid Arduino response")
+                else:
+                    # No complete line yet, wait for more data
+                    break
+
+        # Check timeout
+        elapsed_time = time.perf_counter() - start_time
+        if elapsed_time > timeout / 2 and elapsed_time < (timeout / 2 + 1):
+            logger.warning(
+                f"No data received in {timeout / 2:.1f}s, still listening..."
             )
-            raise DataCollectionError(
-                "There was an unexpected 'END RECORDING' or invalid JSON data."
-            )
+        elif elapsed_time >= timeout:
+            logger.error(f"Timeout: No data received in {elapsed_time:.1f}s")
+            raise DataCollectionError("Timeout waiting for Arduino data")
 
-    # Parse JSON
-    try:
-        data = json.loads(buffer)
-        logger.info("Parsed JSON data successfully.")
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON from Arduino: {e}\nBuffer: {buffer[:200]}")
-        raise DataCollectionError(
-            f"Invalid JSON from Arduino: {e}\nBuffer: {buffer[:200]}"
-        )
-
-    # Validate captured data
-    _validate_audio_data(data)
-    return data
+        # Small 1ms sleep to prevent busy-waiting (CPU usage)
+        time.sleep(0.001)
 
 
 def _validate_audio_data(data: Dict[str, Any]) -> None:
