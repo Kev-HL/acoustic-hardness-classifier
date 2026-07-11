@@ -155,6 +155,7 @@ def get_arduino_data(ser: serial.Serial, timeout: float = 120.0) -> Dict[str, An
     logger.info("Listening for trigger...")
     buffer = ""
     start_time = time.perf_counter()
+    timeout_warning_logged = False
 
     while True:
         # Non-blocking read: read whatever is available
@@ -172,11 +173,13 @@ def get_arduino_data(ser: serial.Serial, timeout: float = 120.0) -> Dict[str, An
         while True:
             # Look for complete JSON: starts with { and ends with }\n
             if buffer.startswith("{"):
-                # Find closing brace followed by newline
-                json_end = buffer.find("}\n")
+                # Find closing brace followed by carriage return and newline
+                # Arduino's serial.println() adds \r\n
+                json_end = buffer.find("}\r\n")
                 if json_end != -1:
                     json_str = buffer[: json_end + 1].strip()
                     buffer = buffer[json_end + 2 :]  # Remove processed data
+                    logger.info("Received JSON data from Arduino.")
                     try:
                         data = json.loads(json_str)
                         logger.info("Parsed JSON data successfully.")
@@ -204,27 +207,30 @@ def get_arduino_data(ser: serial.Serial, timeout: float = 120.0) -> Dict[str, An
                     if any(
                         x in line
                         for x in [
-                            "TRIGGER",
-                            "RECORDING",
-                            "Max loop",
-                            "READY",
-                            "Drop object",
+                            "Drop object to trigger capture",
+                            "TRIGGER DETECTED",
+                            "RECORDING DATA",
+                            "Max loop iteration time",
+                            "READY FOR NEXT DROP",
                         ]
                     ):
                         logger.info(f"Arduino: {line}")
                     elif "END RECORDING" in line:
                         logger.error("Unexpected END RECORDING without valid JSON")
-                        raise DataCollectionError("Invalid Arduino response")
+                        raise DataCollectionError(
+                            "Unexpected END RECORDING without valid JSON"
+                        )
                 else:
                     # No complete line yet, wait for more data
                     break
 
         # Check timeout
         elapsed_time = time.perf_counter() - start_time
-        if elapsed_time > timeout / 2 and elapsed_time < (timeout / 2 + 1):
+        if elapsed_time > timeout / 2 and not timeout_warning_logged:
             logger.warning(
-                f"No data received in {timeout / 2:.1f}s, still listening..."
+                f"No data has been received in {timeout / 2:.1f}s, still listening..."
             )
+            timeout_warning_logged = True
         elif elapsed_time >= timeout:
             logger.error(f"Timeout: No data received in {elapsed_time:.1f}s")
             raise DataCollectionError("Timeout waiting for Arduino data")

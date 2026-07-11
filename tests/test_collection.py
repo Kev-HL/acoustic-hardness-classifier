@@ -110,12 +110,16 @@ class TestGetArduinoData:
         """Test successful data retrieval from Arduino."""
         mock_serial = Mock()
         mock_serial.timeout = 10.0
-        mock_serial.readline.side_effect = [
-            b"",
-            b"Recording continuously. Drop object to trigger capture...",
-            b"--- TRIGGER DETECTED ---",
-            b"--- RECORDING DATA ---",
-            b'{"foo": "bar"}',
+
+        # Simulate data available
+        mock_serial.in_waiting = 1
+
+        # Simulate chunks arriving over multiple iterations with a valid JSON string
+        mock_serial.read.side_effect = [
+            b"Recording continuously. Drop object to trigger capture...\n",
+            b"--- TRIGGER DETECTED ---\n",
+            b"--- RECORDING DATA ---\n",
+            b'{"foo": "bar"}\r\n',
         ]
 
         with caplog.at_level(logging.INFO):
@@ -142,21 +146,17 @@ class TestGetArduinoData:
         """Test timeout when no data is received from Arduino."""
         mock_serial = Mock()
         mock_serial.timeout = 10.0
-        mock_serial.readline.side_effect = [
-            b"",
-            b"",
-            b"--- TRIGGER DETECTED ---",
-            b"",
-        ]
+        mock_serial.in_waiting = 0  # Simulate no data available
+        fn_timeout = 120.0  # Default timeout for get_arduino_data
 
         with caplog.at_level(logging.INFO):
             with pytest.raises(
-                DataCollectionError, match="Timeout: No data received in"
+                DataCollectionError, match="Timeout waiting for Arduino data"
             ):
-                get_arduino_data(mock_serial)
+                get_arduino_data(mock_serial, timeout=fn_timeout)
 
-        assert "No data received in more than" in caplog.text
-        assert "Arduino: --- TRIGGER DETECTED ---" in caplog.text
+        assert "No data has been received in 60.0s, still listening..." in caplog.text
+        assert "Timeout: No data received in 125.0s" in caplog.text
 
     def test_incomplete_data_received(self, mock_validate_audio_data: Mock) -> None:
         """
@@ -166,13 +166,18 @@ class TestGetArduinoData:
         """
         mock_serial = Mock()
         mock_serial.timeout = 10.0
-        mock_serial.readline.side_effect = [
-            b"--- END RECORDING ---",
+
+        # Simulate data available
+        mock_serial.in_waiting = 1
+
+        # Simulate chunks arriving over multiple iterations with a valid JSON string
+        mock_serial.read.side_effect = [
+            b"--- END RECORDING ---\n",
         ]
 
         with pytest.raises(
             DataCollectionError,
-            match="There was an unexpected 'END RECORDING' or invalid JSON data",
+            match="Unexpected END RECORDING without valid JSON",
         ):
             get_arduino_data(mock_serial)
 
@@ -183,11 +188,31 @@ class TestGetArduinoData:
         """
         mock_serial = Mock()
         mock_serial.timeout = 10.0
-        mock_serial.readline.side_effect = [
-            b"{invalid_json: true}",
-        ]
 
+        # Simulate data available
+        mock_serial.in_waiting = 1
+
+        # Simulate chunks arriving over multiple iterations with a valid JSON string
+        mock_serial.read.side_effect = [
+            b"{invalid_json: true}\r\n",
+        ]
         with pytest.raises(DataCollectionError, match="Invalid JSON from Arduino"):
+            get_arduino_data(mock_serial)
+
+    def test_serial_read_error(self, mock_validate_audio_data: Mock) -> None:
+        """Test handling of serial port read errors."""
+        mock_serial = Mock()
+        mock_serial.timeout = 10.0
+
+        # Simulate data available
+        mock_serial.in_waiting = 1
+
+        # Simulate a serial read error
+        mock_serial.read.side_effect = Exception("Serial port disconnected")
+
+        with pytest.raises(
+            DataCollectionError, match="Serial read error: Serial port disconnected"
+        ):
             get_arduino_data(mock_serial)
 
 
