@@ -6,6 +6,7 @@ Python module for data collection logic for the Acoustic Hardness Classifier Pro
 import json
 import logging
 import signal
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -363,3 +364,44 @@ def save_sample(sample: Dict[str, Any], output_dir: Path) -> None:
     except IOError as e:
         logger.error(f"Failed to save sample: {e}")
         raise DataCollectionError(f"Failed to save sample: {e}")
+
+
+def wait_for_confirmation_with_buffer_drain(
+    ser: serial.Serial, timeout: float = 120.0
+) -> None:
+    """
+    Wait for user confirmation while continuously draining serial buffer.
+
+    Prevents accidental Arduino triggers from blocking subsequent captures.
+    Drains buffer every 500ms while waiting for user to press ENTER.
+    """
+    stop_drain = False
+
+    def drain_buffer():
+        """Continuously drain serial buffer until user is ready."""
+        while not stop_drain:
+            if ser.in_waiting > 0:
+                drained = ser.read(min(ser.in_waiting, 4096))
+                logger.debug(f"Drained {len(drained)} bytes during confirmation wait")
+            time.sleep(0.5)  # Drain every 500ms
+
+    # Start background drain thread (daemon so it exits with main thread)
+    drain_thread = threading.Thread(target=drain_buffer, daemon=True)
+    drain_thread.start()
+
+    try:
+        inputimeout(
+            prompt=(
+                "\nReady for drop? Press ENTER to start recording...\n"
+                "(Wait for Arduino to be ready: Orange LED ON)\n"
+            ),
+            timeout=timeout,
+        )
+    except TimeoutOccurred:
+        stop_drain = True
+        raise DataCollectionError(
+            "Timeout occurred while waiting for user confirmation."
+        )
+    finally:
+        stop_drain = True
+        drain_thread.join(timeout=1.0)

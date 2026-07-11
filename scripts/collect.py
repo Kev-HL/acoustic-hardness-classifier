@@ -32,6 +32,7 @@ from ahc.collection import (
     init_serial_connection,
     input_sample_metadata,
     save_sample,
+    wait_for_confirmation_with_buffer_drain,
 )
 
 # Set up logging
@@ -122,16 +123,7 @@ def main() -> None:
                 metadata = input_sample_metadata(SAMPLE_TIMEOUT)
 
                 # Wait for user confirmation
-                try:
-                    inputimeout(
-                        prompt="\nReady for drop? Press ENTER to start recording...\n",
-                        timeout=SAMPLE_TIMEOUT,
-                    )
-                except TimeoutOccurred:
-                    raise DataCollectionError(
-                        "Timeout occurred while waiting for user confirmation."
-                    )
-                ser.reset_input_buffer()
+                wait_for_confirmation_with_buffer_drain(ser, timeout=SAMPLE_TIMEOUT)
 
                 # Capture audio from Arduino
                 arduino_data = get_arduino_data(ser, SAMPLE_TIMEOUT)
