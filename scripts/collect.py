@@ -128,11 +128,27 @@ def main() -> None:
                 # Capture audio from Arduino
                 arduino_data = get_arduino_data(ser, SAMPLE_TIMEOUT)
 
-                # Create and save sample
+                # Create and save sample after user confirmation
                 sample = create_sample(metadata, arduino_data)
-                logger.info("Sample created succesfully")
-                save_sample(sample, output_dir)
-                samples_this_session += 1
+                logger.info("Sample created successfully")
+                try:
+                    discard_input = (
+                        inputimeout(
+                            prompt="\nValid sample? ENTER to keep, 'no' to discard: ",
+                            timeout=SAMPLE_TIMEOUT,
+                        )
+                        .strip()
+                        .lower()
+                    )
+                except TimeoutOccurred:
+                    raise DataCollectionError(
+                        "Timeout occurred while waiting for user input."
+                    )
+                if discard_input != "no":
+                    save_sample(sample, output_dir)
+                    samples_this_session += 1
+                else:
+                    logger.info("Sample discarded")
 
                 # Ask if user wants to continue
                 while True:
