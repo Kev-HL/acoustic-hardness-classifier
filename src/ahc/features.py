@@ -64,8 +64,11 @@ def _compute_features_single(sample: dict) -> dict:
     rms = np.sqrt(np.mean(values**2))
     # Peak Absolute Amplitude
     peak = np.max(np.abs(values))
-    # Zero Crossing Rate (ZCR) (normalized)
-    zcr = np.mean(np.abs(np.diff(np.signbit(values).astype(int))))
+    # Zero Crossing Rate (ZCR), normalized and computed using hysteresis
+    ambient_noise_window = int(0.9 * pre_trigger_samples)
+    std_ambient_noise = np.std(values[:ambient_noise_window], ddof=1)
+    zcr_hysteresis_threshold = 4 * std_ambient_noise
+    zcr = _zcr_hysteresis(values, zcr_hysteresis_threshold)
     # Decay Ratio (post-impact)
     decay_ratio = _compute_decay_ratio(values, pre_trigger_samples)
     # Crest Factor (peak-to-RMS ratio)
@@ -197,3 +200,34 @@ def compute_features(samples: list[dict]) -> list[dict]:
         sample["features"] = _compute_features_single(sample)
 
     return samples
+
+
+def _zcr_hysteresis(
+    values: list[int] | np.ndarray, threshold: float | np.floating
+) -> float:
+    """
+    Compute the zero-crossing rate (ZCR) of a signal with hysteresis and a dead range to
+    reduce noise sensitivity.
+
+    Args:
+        values (list of int or np.ndarray): The audio signal samples.
+        threshold (float): The hysteresis threshold.
+
+    Returns:
+        float: The normalized zero-crossing rate of the signal.
+    """
+    state = 1 if values[0] >= 0 else -1
+    crossings = 0
+
+    for sample in values[1:]:
+        if state == 1:
+            if sample < -threshold:
+                state = -1
+                crossings += 1
+
+        else:
+            if sample > threshold:
+                state = 1
+                crossings += 1
+
+    return crossings / (len(values) - 1) if len(values) > 1 else 0.0
