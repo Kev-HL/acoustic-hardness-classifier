@@ -64,13 +64,14 @@ def _compute_features_single(sample: dict) -> dict:
     rms = np.sqrt(np.mean(values**2))
     # Peak Absolute Amplitude
     peak = np.max(np.abs(values))
-    # Zero Crossing Rate (ZCR), normalized and computed using hysteresis
+    # USAGE ON COMPUTE_FEATURES
+    # Compute sample std of ambient noise using the first 90% of the pre-trigger window
     ambient_noise_window = int(0.9 * pre_trigger_samples)
     std_ambient_noise = np.std(values[:ambient_noise_window], ddof=1)
-    zcr_hysteresis_threshold = 4 * std_ambient_noise
-    zcr = _zcr_hysteresis(values, zcr_hysteresis_threshold)
-    # Decay Ratio (post-impact)
-    decay_ratio = _compute_decay_ratio(values, pre_trigger_samples)
+    # Zero Crossing Rate (ZCR), normalized and computed using hysteresis
+    zcr = _zcr_hysteresis(values, std_ambient_noise)
+    # Settling Time (post-impact)
+    settling_time = _compute_settling_time(values, sample_rate, pre_trigger_samples)
     # Crest Factor (peak-to-RMS ratio)
     crest_factor = peak / (rms + eps)
 
@@ -107,7 +108,7 @@ def _compute_features_single(sample: dict) -> dict:
         "rms": rms,
         "peak": peak,
         "zcr": zcr,
-        "decay_ratio": decay_ratio,
+        "settling_time": settling_time,
         "crest_factor": crest_factor,
         "spectral_flatness": spectral_flatness,
         "spectral_centroid": spectral_centroid,
@@ -203,23 +204,24 @@ def compute_features(samples: list[dict]) -> list[dict]:
 
 
 def _zcr_hysteresis(
-    values: list[int] | np.ndarray, threshold: float | np.floating
+    signal: list[int] | np.ndarray, std_ambient_noise: float | np.floating
 ) -> float:
     """
     Compute the zero-crossing rate (ZCR) of a signal with hysteresis and a dead range to
     reduce noise sensitivity.
 
     Args:
-        values (list of int or np.ndarray): The audio signal samples.
-        threshold (float): The hysteresis threshold.
+        signal (list of int or np.ndarray): The audio signal samples.
+        std_ambient_noise (float): The sample standard deviation of the ambient noise.
 
     Returns:
         float: The normalized zero-crossing rate of the signal.
     """
-    state = 1 if values[0] >= 0 else -1
+    threshold = 4 * std_ambient_noise
+    state = 1 if signal[0] >= 0 else -1
     crossings = 0
 
-    for sample in values[1:]:
+    for sample in signal[1:]:
         if state == 1:
             if sample < -threshold:
                 state = -1
@@ -230,4 +232,106 @@ def _zcr_hysteresis(
                 state = 1
                 crossings += 1
 
-    return crossings / (len(values) - 1) if len(values) > 1 else 0.0
+    return crossings / (len(signal) - 1) if len(signal) > 1 else 0.0
+
+
+def _compute_settling_time(
+    signal: list[int] | np.ndarray,
+    sample_rate: int | np.integer,
+    pre_trigger_samples: int | np.integer,
+) -> float:
+    """
+    Compute the settling time of a signal, defined as the time it takes for the signal
+    to remain below a certain threshold after the peak value.
+
+    Note: Assumes that the signal is centered around zero (DC offset removed), and that
+    the signal is long enough, there are safeguards in place but results may be wrong or
+    inaccurate.
+
+    Args:
+        signal (list of int or np.ndarray): The audio signal samples.
+        sample_rate (int): The sample rate of the audio signal in Hz.
+        pre_trigger_samples (int): The number of pre-trigger samples.
+
+    Returns:
+        float: The settling time of the signal in seconds.
+    """
+    if sample_rate <= 0:
+        logger.error("Sample rate must be a positive integer.")
+        raise ValueError("Sample rate must be a positive integer.")
+    if pre_trigger_samples <= 0 or pre_trigger_samples >= len(signal):
+        logger.error(
+            "Pre-trigger samples must be a positive integer "
+            "less than the length of the signal."
+        )
+        raise ValueError(
+            "Pre-trigger samples must be a positive integer "
+            "less than the length of the signal."
+        )
+    # Set tau for EMA envelope calculation
+    tau_ms = 10
+    tau_samples = max(1, tau_ms * sample_rate // 1000)  # Ensure at least 1 sample
+
+    if tau_samples >= len(signal):
+        logger.warning(
+            "Signal length is shorter than expected. Settling time may not be accurate."
+        )
+        tau_samples = len(signal) // 2  # Use half the signal length
+
+    # Set constants for end threshold calculation (k1 high range, k2 low range)
+    rel_peak_ratio = 0.07  # dominant for loud/high-energy signals
+    noise_floor_ratio = 3  # dominant for quiet/low-energy signals
+
+    # Compute noise window (90% of pre-trigger to avoid precursor waves)
+    noise_window = int(0.9 * pre_trigger_samples)
+
+    # Compute envelope of the signal (EMA)
+    signal = np.asarray(signal, dtype=np.float32)
+    inst_power = signal * signal
+    mean_square = np.empty_like(inst_power)
+    mean_square[0] = np.median(inst_power[:noise_window])
+    alpha = np.exp(-1.0 / tau_samples)
+    for i in range(1, len(inst_power)):
+        mean_square[i] = mean_square[i - 1] + (1 - alpha) * (
+            inst_power[i] - mean_square[i - 1]
+        )
+    env = np.sqrt(mean_square)
+
+    # Find main impact peak on signal
+    main_impact_window = (
+        int(0.9 * pre_trigger_samples),
+        int(1.3 * pre_trigger_samples),
+    )
+    max_peak_idx = (
+        np.argmax(np.abs(signal[main_impact_window[0] : main_impact_window[1]]))
+        + main_impact_window[0]
+    )
+
+    # Find max envelope value after main impact (with small delay)
+    peak_env = np.max(env[max_peak_idx:])
+
+    # Compute noise floor on envelope using noise window
+    noise_floor = np.median(env[:noise_window])
+
+    # Set threshold for end of settling time
+    thresh = max(rel_peak_ratio * peak_env, noise_floor_ratio * noise_floor)
+
+    # Find end of settling time (stays below threshold for at least min_below_ms ms)
+    below = env < thresh
+    min_below_ms = 100
+    min_below = int(min_below_ms * sample_rate / 1000)
+    end_idx = len(env) - 1  # fallback: end of signal
+    count = 0
+    for i in range(len(below) - 1, max_peak_idx, -1):
+        if below[i]:
+            count += 1
+        else:
+            if count >= min_below:
+                end_idx = i
+                break
+            count = 0
+
+    # Compute settling time in seconds
+    settling_time = (end_idx - max_peak_idx) / sample_rate
+
+    return settling_time
