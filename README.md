@@ -105,8 +105,9 @@ This project implements an end-to-end machine learning pipeline on a microcontro
 - TensorFlow — Deep learning framework
 
 **Utilities:**
-- NumPy, Pandas — Data manipulation and analysis
+- NumPy, Pandas, Scipy — Data manipulation and analysis
 - Matplotlib — Visualization
+- Scikit-learn — Modelling and ML related tools
 
 **Development:**
 - Ruff — Code formatting and linting
@@ -128,9 +129,15 @@ This project implements an end-to-end machine learning pipeline on a microcontro
 
 ## Citations & References
 
+**Citations:**  
 - [Arduino Official Page](https://www.arduino.cc/)
 - [Arduino Docs](https://docs.arduino.cc/)
 - [Nano 33 BLE Sense Rev2 Docs Page](https://docs.arduino.cc/hardware/nano-33-ble-sense-rev2/)
+- [Nordic nRF52840 Microcontroller Datasheet](https://docs.nordicsemi.com/r/bundle/ps_nrf52840/page/keyfeatures_html5.html)
+- [ST MP34DT06JTR Mems Microphone Datasheet](https://www.st.com/resource/en/datasheet/mp34dt06j.pdf)
+
+**References:**  
+- Welch Method: [The Use of Fast Fourier Transform for the Estimation of Power Spectra](https://ieeexplore.ieee.org/document/1161901/) (Welch, IEEE Transactions on Audio and Electroacoustics, 1967)
 
 ---
 
