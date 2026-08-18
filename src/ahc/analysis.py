@@ -9,7 +9,11 @@ import logging
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.lines import Line2D
 from scipy import signal as sp_signal
+from scipy.stats import f_oneway
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 
 # Local imports
 from ahc.signal_processing import remove_dc_offset
@@ -367,7 +371,12 @@ def compute_ambient_noise_level(samples: list[dict], duration: float) -> dict:
     }
 
 
-def plot_time_domain(samples, plot_window=None, legend=False, classes_axes_map=None):
+def plot_time_domain(
+    samples: list[dict],
+    plot_window: tuple[float, float] | None = None,
+    legend: bool = False,
+    classes_axes_map: dict | None = None,
+) -> None:
     """
     Plot raw waveforms for each class.
 
@@ -386,7 +395,7 @@ def plot_time_domain(samples, plot_window=None, legend=False, classes_axes_map=N
 
     # Get the duration to plot, capped at the sample duration boundaries
     if plot_window is None:
-        plot_window = [0.0, 0.0]  # Defaults to full duration
+        plot_window = (0.0, 0.0)  # Defaults to full duration
     window_start, window_end = plot_window
     signal_duration = samples[0]["audio"]["duration_seconds"]
     window_start = max(0.0, window_start)
@@ -436,7 +445,9 @@ def plot_time_domain(samples, plot_window=None, legend=False, classes_axes_map=N
     plt.show()
 
 
-def plot_frequency_domain(samples, legend=False, classes_axes_map=None):
+def plot_frequency_domain(
+    samples: list[dict], legend: bool = False, classes_axes_map: dict | None = None
+) -> None:
     """
     Plot Power Spectral Density (PSD) for each class
 
@@ -490,7 +501,9 @@ def plot_frequency_domain(samples, legend=False, classes_axes_map=None):
     plt.show()
 
 
-def plot_spectrograms(samples, classes_axes_map=None):
+def plot_spectrograms(
+    samples: list[dict], classes_axes_map: dict | None = None
+) -> None:
     """
     Plot spectrograms for each class (heat map of frequency content over time)
 
@@ -547,3 +560,475 @@ def plot_spectrograms(samples, classes_axes_map=None):
     axes[-1].set_xlabel("Time (s)")
     plt.tight_layout()
     plt.show()
+
+
+def average_signals_per_material(samples: list[dict]) -> list[dict]:
+    """
+    Average signals per material.
+    Keeps same sample structure, but with one sample per material.
+    sample_id is set to material name, and class is set to the class of the first sample
+    from that material
+
+    IMPORTANT: To be used just for plotting purposes. Function assumes that all samples
+    have the same sample rate and duration, and that all samples from the same material
+    have the same class.
+
+    Args:
+        samples: List of sample dicts
+
+    Returns:
+        List of averaged sample dicts, one per material.
+    """
+    material_groups = {}
+    material_averages = []
+
+    for sample in samples:
+        material = sample["metadata"]["material"]
+        if material not in material_groups:
+            material_groups[material] = []
+        material_groups[material].append(sample)
+
+    for material, samples in material_groups.items():
+        avg_values = np.mean([s["audio"]["values"] for s in samples], axis=0).tolist()
+        material_averages.append(
+            {
+                "metadata": {
+                    "sample_id": material,
+                    "class": samples[0]["metadata"]["class"],
+                },
+                "audio": {
+                    "duration_seconds": samples[0]["audio"]["duration_seconds"],
+                    "sample_rate": samples[0]["audio"]["sample_rate"],
+                    "values": avg_values,
+                },
+            }
+        )
+
+    return material_averages
+
+
+def plot_materials_spectrograms(
+    samples: list[dict], classes_axes_map: dict | None = None
+) -> None:
+    """
+    Plot spectrograms for each material (heat map of frequency content over time)
+
+    Important: This function assumes that the list of samples has been pre-processed to
+    contain one sample per material, with the sample_id set to the material name, and
+    its signal being the average of all samples for that material.
+    (See average_signals_per_material in this module)
+    It also assumes that all samples have the same sample rate, and that we have 9
+    materials, 3 for each class (hard, medium, soft).
+
+    Args:
+        samples: List of sample dicts
+    """
+    if classes_axes_map is None:
+        classes_axes_map = {"hard": 0, "medium": 1, "soft": 2}
+
+    plot_values = [[], [], []]  # Initialize a list of lists for each class
+    for class_name, idy in classes_axes_map.items():
+        idx = 0
+        for sample in samples:
+            if sample["metadata"]["class"] == class_name:
+                plot_values[idy].append(sample)
+                idx += 1
+
+    # Get sample rate
+    sample_rate = samples[0]["audio"]["sample_rate"]
+
+    fig, axes = plt.subplots(3, 3, figsize=(14, 10))
+    fig.suptitle("Spectrograms by Material", fontsize=14, fontweight="bold")
+
+    for class_name, idy in classes_axes_map.items():
+        for idx in range(len(plot_values[idy])):
+            ax = axes[idx, idy]
+
+            # Remove DC offset for better visualization
+            values = plot_values[idy][idx]["audio"]["values"]
+            values = remove_dc_offset(values)
+
+            # Compute spectrogram
+            frequencies, times, spectrogram = sp_signal.spectrogram(
+                values, sample_rate, nperseg=1024
+            )
+
+            # Plot heatmap of the spectrogram in dB scale
+            im = ax.pcolormesh(
+                times,
+                frequencies,
+                10 * np.log10(spectrogram + 1e-12),
+                shading="gouraud",
+                cmap="viridis",
+            )
+            material_name = plot_values[idy][idx]["metadata"]["sample_id"]
+            ax.set_title(
+                f"{class_name.upper()} - ({material_name})",
+                fontweight="bold",
+            )
+            ax.set_ylabel("Frequency (Hz)")
+            ax.set_ylim([0, sample_rate / 2])  # Limit to Nyquist frequency
+            plt.colorbar(im, ax=ax, label="Power (dB)")
+            ax.set_xlabel("Time (s)")
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_feature_distributions(
+    samples: list[dict], class_names: list[str] | None = None
+) -> None:
+    """
+    Plot feature distributions for each class.
+    Made for concept validation analysis of the Acoustic Hardness Classifier project.
+
+    Produces a 3x3 grid:
+        - one subplot per feature
+        - one boxplot per class
+        - jittered individual observations
+        - marker shape identifies material
+        - point color identifies class
+        - legend at bottom of figure identifies materials per marker shape/color
+
+    Assumes:
+        - exactly 3 classes
+        - 3 materials per class
+        - 3 repetitions per material
+        - 9 features per sample (3x3 grid)
+
+    Args:
+        samples (list[dict]): List of sample dictionaries, each containing 'features'
+        and 'metadata'.
+        class_names (list[str] | None): Optional list of class names. If None, defaults
+        to ["hard", "medium", "soft"].
+    """
+    # Define class names, positions, colors, and markers for plotting
+    if class_names is None:
+        class_names = ["hard", "medium", "soft"]
+    if len(class_names) != 3:
+        raise ValueError(
+            f"Expected 3 classes, but found {len(class_names)} classes: {class_names}"
+        )
+    class_positions = range(1, len(class_names) + 1)  # [1, 2, 3]
+    class_colors = {}
+    class_colors[class_names[0]] = "#1f77b4"  # Blue for hard
+    class_colors[class_names[1]] = "#ff7f0e"  # Orange for medium
+    class_colors[class_names[2]] = "#2ca02c"  # Green for soft
+    markers = ["o", "s", "^"]  # Circle, square, triangle markers for materials
+
+    # Get feature names from the first sample
+    feature_names = list(samples[0]["features"].keys())
+    if len(feature_names) != 9:
+        raise ValueError(
+            f"Expected 9 features, but found {len(feature_names)} "
+            f"features: {feature_names}"
+        )
+
+    # Create a mapping of materials to markers for each class
+    material_marker = {}
+    for cls in class_names:
+        materials = sorted(
+            {
+                sample["metadata"]["material"]
+                for sample in samples
+                if sample["metadata"]["class"] == cls
+            }
+        )
+        if len(materials) != 3:
+            raise ValueError(
+                f"Expected 3 materials for class '{cls}', but found "
+                f"{len(materials)}: {materials}"
+            )
+        material_marker[cls] = {
+            material: markers[i] for i, material in enumerate(materials)
+        }
+
+    # Group samples by class
+    samples_by_class = {
+        cls: [s for s in samples if s["metadata"]["class"] == cls]
+        for cls in class_names
+    }
+
+    # Create a 3x3 grid of subplots for the features
+    fig, axes = plt.subplots(3, 3, figsize=(14, 13))
+    axes = axes.flatten()
+    fig.suptitle(
+        "Feature Distributions by Class",
+        fontsize=16,
+        fontweight="bold",
+    )
+
+    # Set random seed for reproducibility of jitter
+    rng = np.random.default_rng(seed=42)
+
+    # Loop through features and draw subplot for each
+    for ax, feature in zip(axes, feature_names):
+        # Group values by class-feature combination for boxplots
+        grouped_values = [
+            [s["features"][feature] for s in samples_by_class[cls]]
+            for cls in class_names
+        ]
+
+        # Draw boxplots
+        ax.boxplot(
+            grouped_values,
+            positions=class_positions,
+            widths=0.45,
+            showfliers=False,
+            patch_artist=True,
+            boxprops=dict(
+                facecolor="lightgray",
+                edgecolor="lightgray",
+                alpha=0.5,
+            ),
+            medianprops=dict(
+                color="black",
+                linewidth=2.2,
+            ),
+            whiskerprops=dict(
+                color="black",
+                linewidth=1.3,
+            ),
+            capprops=dict(
+                color="black",
+                linewidth=1.3,
+            ),
+        )
+
+        # Overlay data points (individual samples)
+        for xpos, cls in enumerate(class_names, start=1):
+            values_for_mean = []
+            for sample in samples_by_class[cls]:
+                # Add jitter to the x-position to avoid overlap
+                jitter = rng.uniform(-0.10, 0.10)
+                # Use scatterplot to plot the individual points
+                ax.scatter(
+                    xpos + jitter,
+                    sample["features"][feature],
+                    color=class_colors[cls],
+                    marker=material_marker[cls][sample["metadata"]["material"]],
+                    edgecolors="black",
+                    linewidths=0.5,
+                    s=55,  # Marker size on plots
+                    alpha=0.9,
+                    zorder=3,  # Ensure points are above boxplots
+                )
+                values_for_mean.append(sample["features"][feature])
+            # Compute mean and overlay it as a diamond marker
+            mean_value = np.mean(values_for_mean)
+            ax.scatter(
+                xpos,
+                mean_value,
+                color="black",
+                marker="D",  # Diamond marker for mean
+                edgecolors="white",
+                linewidths=1.35,
+                s=60,  # Marker size for mean
+                alpha=0.9,
+                zorder=4,  # Ensure mean marker is above individual points
+            )
+
+        # Cosmetics
+        ax.set_xticks(class_positions)
+        ax.set_xticklabels(class_names)
+        ax.set_title(
+            feature,
+            fontsize=11,
+            fontweight="bold",
+        )
+        ax.spines["left"].set_color("0.7")
+        ax.spines["bottom"].set_color("0.7")
+        ax.spines["right"].set_color("0.7")
+        ax.spines["top"].set_color("0.7")
+        ax.grid(axis="y", alpha=0.3)
+
+    # Legends for materials (one per class) at the bottom of the figure
+    legend_positions = [0.18, 0.50, 0.82]
+    for x_pos, cls in zip(legend_positions, class_names):
+        handles = []
+        for material, marker in material_marker[cls].items():
+            handles.append(
+                Line2D(
+                    [],
+                    [],
+                    marker=marker,
+                    linestyle="None",
+                    markerfacecolor=class_colors[cls],
+                    markeredgecolor="black",
+                    markersize=8,
+                    label=material,
+                )
+            )
+        fig.legend(
+            handles=handles,
+            title=cls.upper(),
+            loc="lower center",
+            bbox_to_anchor=(x_pos, 0.01),
+            fontsize=9,
+            title_fontproperties={"size": 10, "weight": "bold"},
+        )
+
+    # Adjust layout (space for legends at the bottom and small space after top title)
+    plt.tight_layout(rect=(0, 0.10, 1, 0.98))
+    # Show the plot
+    plt.show()
+
+
+def compute_oneway_anova_by_feature(samples: list[dict]) -> pd.DataFrame:
+    """
+    Compute one-way ANOVA for each feature across classes.
+
+    Args:
+        samples (list of dict): A list of dictionaries containing the audio samples,
+        where each sample is a dictionary with metadata, audio data, and computed
+        features.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the one-way ANOVA results for each feature,
+        with columns for F-statistic and p-value.
+    """
+    # Assuming all samples have the same set of features
+    feature_names = samples[0]["features"].keys() if samples else []
+
+    # Initialize a dictionary to hold samples by class and a set for class names
+    class_names = set()
+    samples_by_class = {}
+
+    # Group samples by class
+    for sample in samples:
+        cls = sample["metadata"]["class"]
+        class_names.add(cls)
+        if cls not in samples_by_class:
+            samples_by_class[cls] = []
+        samples_by_class[cls].append(sample)
+
+    # Perform ANOVA for each feature
+    anova_results = {}
+    for feature in feature_names:
+        # Collect feature values for each class
+        feature_values_by_class = [
+            [sample["features"][feature] for sample in samples_by_class[cls]]
+            for cls in class_names
+        ]
+        anova_results_feature = f_oneway(*feature_values_by_class)
+        anova_results[feature] = {
+            "F-statistic": anova_results_feature.statistic,
+            "p-value": anova_results_feature.pvalue,
+        }
+
+    return pd.DataFrame(anova_results).T
+
+
+def plot_corr_matrix(samples: list[dict]) -> None:
+    """
+    Plot correlation matrix of features across all samples.
+
+    Note: Assumes that features have been computed for all samples, and that the set of
+    features is the same for all samples.
+
+    Args:
+        samples (list of dict): A list of dictionaries containing the audio samples,
+        where each sample is a dictionary with metadata, audio data, and computed
+        features.
+    """
+    df = pd.DataFrame([sample["features"] for sample in samples])
+
+    corr = df.corr()
+    vmax = corr.abs().max().max()
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    im = ax.imshow(corr, cmap="Blues", vmin=-1, vmax=1)
+
+    for i in range(len(corr)):
+        for j in range(len(corr.columns)):
+            value = corr.iloc[i, j]
+            ax.text(
+                j,
+                i,
+                f"{corr.iloc[i, j]:.2f}",
+                ha="center",
+                va="center",
+                color="white" if value / vmax > 0.5 else "black",
+            )
+
+    ax.set_xticks(np.arange(len(corr.columns)))
+    ax.set_yticks(np.arange(len(corr.columns)))
+
+    ax.set_xticklabels(corr.columns, rotation=45, ha="right")
+    ax.set_yticklabels(corr.columns)
+
+    fig.colorbar(im, ax=ax, label="Correlation")
+
+    ax.set_title("Feature Correlation Matrix")
+
+    plt.tight_layout()
+    plt.show()
+
+
+def compute_pca(samples: list[dict]) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Compute PCA on the features of the samples.
+
+    Assumes features have been computed for all samples, and that the set of features is
+    the same for all samples.
+
+    Args:
+        samples (list of dict): A list of dictionaries containing the audio samples,
+        where each sample is a dictionary with metadata, audio data, and computed
+        features.
+
+    Returns:
+        tuple: A tuple containing:
+            - the transformed feature matrix as a DataFrame (features_pca_df)
+            - the explained variance ratio DataFrame (evr_df)
+            - the PCA components DataFrame (components_df)
+    """
+    # Get feature names from the first sample
+    features_names = list(samples[0]["features"].keys())
+
+    # Create a 2D array of shape (num_samples, num_features) for PCA
+    # Create a 1D array of shape (num_samples,) for the labels to color the PCA plot
+    # Create a list of unique class names for labeling the PCA plot
+    features_array = []
+    labels_array = []
+    for sample in samples:
+        features_array.append([sample["features"][f] for f in features_names])
+        labels_array.append(sample["metadata"]["class"])
+
+    # Standardize the features before applying PCA
+    scaler = StandardScaler()
+    features_array_std = scaler.fit_transform(features_array)
+
+    # Apply PCA
+    pca = PCA()
+    features_pca = pca.fit_transform(features_array_std)
+
+    # Create DataFrames for the PCA results ready for plotting
+    pc_columns = [f"PC{i + 1}" for i in range(features_pca.shape[1])]
+    features_pca_df = pd.DataFrame(features_pca, columns=pc_columns)
+    features_pca_df["label"] = labels_array
+
+    # Create a DataFrame for the explained variance ratio
+    evr = []
+    cum = 0.0
+    for i, var in enumerate(pca.explained_variance_ratio_):
+        cum += var
+        evr.append(
+            {
+                "PC": f"PC{i + 1}",
+                "explained_variance_ratio": var,
+                "cumulative_explained_variance_ratio": cum,
+            }
+        )
+    evr_df = pd.DataFrame(evr)
+
+    # Create a DataFrame for the PCA components (loadings)
+    components = {}
+    for i, pc in enumerate(pca.components_):
+        components[f"PC{i + 1}"] = {
+            feature: loading for feature, loading in zip(features_names, pc)
+        }
+    components_df = pd.DataFrame(components)
+
+    return features_pca_df, evr_df, components_df
