@@ -25,13 +25,20 @@ By analyzing the acoustic response of impacts, this project classifies material 
 
 This project implements an end-to-end machine learning pipeline on a microcontroller:
 
+0. **Phase 0: Release Device Comparison** ✅
+   - Compare Impactor Releaser Device against manual drop for data collection
+   - Collect audio samples across 3 hardness classes with both release methods
+   - Analyze signals from both sources
+   - Choose release device moving forward (*Impactor Releaser Device chosen*)
+
 1. **Phase 1: Feasibility Validation** ✅
    - Collect pilot audio samples across 3 hardness classes
    - Validate acoustic separation via signal analysis
-   - Confirm classification viability
+   - Confirm classification viability (*Validation successful*)
 
-2. **Phase 2: Data Collection**
-    (TBD)
+2. **Phase 2: Data Collection** (Work in progress)
+   - Collect remaining samples for full dataset
+   - Clean data and perform EDA
 
 3. **Phase 3: ML Pipeline**
     (TBD)
